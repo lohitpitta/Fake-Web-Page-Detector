@@ -1,53 +1,102 @@
-## Description
-This is a Flask-based phishing detection tool that analyzes URLs and identifies potentially suspicious login pages.
+from flask import Flask, render_template, request
+from urllib.parse import urlparse
+import re
 
-## Features
-- Detects HTTP URLs
-- Detects suspicious keywords:
-  - login
-  - secure
-  - verify
-- Displays Safe or Suspicious result
+app = Flask(__name__)
 
-## Technologies Used
-- Python
-- Flask
-- HTML
-- CSS
+@app.route("/", methods=["GET", "POST"])
+def home():
 
-## How to Run
+    result = None
+    status = None
 
-1. Install Flask
+    if request.method == "POST":
 
-```bash
-python -m pip install flask
-```
+        url = request.form.get("url", "").strip()
 
-2. Run the application
+        # URL format validation
+        url_pattern = re.compile(
+            r'^(https?:\/\/)'
+            r'(([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})'
+            r'(\/.*)?$'
+        )
 
-```bash
-python app.py
-```
+        if not url_pattern.match(url):
+            result = "❌ Invalid URL Format"
+            status = "danger"
 
-3. Open browser
+            return render_template(
+                "index.html",
+                result=result,
+                status=status
+            )
 
-```text
-http://127.0.0.1:5000
-```
+        score = 0
 
-## Example
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
 
-Input:
+        # HTTP instead of HTTPS
+        if url.startswith("http://"):
+            score += 2
 
-```text
-https://insta-login-secure.xyz
-```
+        # Suspicious words
+        suspicious_words = [
+            "login",
+            "secure",
+            "verify",
+            "signin",
+            "update",
+            "account",
+            "banking",
+            "confirm",
+            "wallet"
+        ]
 
-Output:
+        for word in suspicious_words:
+            if word in url.lower():
+                score += 1
 
-```text
-⚠️ Suspicious URL
-```
+        # @ symbol
+        if "@" in url:
+            score += 2
 
-## Author
-LOHIT
+        # Too many hyphens
+        if url.count("-") >= 3:
+            score += 1
+
+        # Long URL
+        if len(url) > 100:
+            score += 1
+
+        # IP address detection
+        ip_pattern = r"\d+\.\d+\.\d+\.\d+"
+
+        if re.search(ip_pattern, url):
+            score += 3
+
+        # Multiple subdomains
+        if domain.count(".") >= 3:
+            score += 1
+
+        # Final Decision
+        if score >= 5:
+            result = "🚨 High Risk URL Detected"
+            status = "danger"
+
+        elif score >= 2:
+            result = "⚠️ Suspicious URL"
+            status = "warning"
+
+        else:
+            result = "✅ Safe URL"
+            status = "safe"
+
+    return render_template(
+        "index.html",
+        result=result,
+        status=status
+    )
+
+if __name__ == "__main__":
+    app.run(debug=True)
